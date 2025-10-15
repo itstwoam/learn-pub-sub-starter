@@ -6,7 +6,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"github.com/itstwoam/learn-pubsub-starter/internal/pubsub"
+	"github.com/itstwoam/learn-pub-sub-starter/internal/pubsub"
+	"github.com/itstwoam/learn-pub-sub-starter/internal/routing"
 )
 
 func main() {
@@ -23,13 +24,14 @@ func main() {
 
 	gameChan, err := gameCon.Channel()
 	if err != nil {
-		fmt.Prinln("error creating amqp channel")
+		fmt.Println("error creating amqp channel")
 		os.Exit(1)
 	}
-	
-	err = pubsub.PublishJSON(gameChan, routing.ExchangerPerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})	
-	if err != nil {
-		fmt.Println("error in pubsub.PublishJSON()")
+	fmt.Println("exchange:", routing.ExchangePerilDirect, "key:", routing.PauseKey)	
+	if err = pubsub.PublishJSON(gameChan, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true}); err != nil {
+		fmt.Println("publish error:", err)
+	}else {
+		fmt.Println("published pause message")
 	}
 
 	sigs := make(chan os.Signal, 1)

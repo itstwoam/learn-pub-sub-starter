@@ -4,8 +4,8 @@ import (
 	"fmt"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"os"
-	"os/signal"
-	"syscall"
+	//"os/signal"
+	//"syscall"
 	"github.com/itstwoam/learn-pub-sub-starter/internal/pubsub"
 	"github.com/itstwoam/learn-pub-sub-starter/internal/routing"
 	"github.com/itstwoam/learn-pub-sub-starter/internal/gamelogic"
@@ -13,6 +13,7 @@ import (
 
 func main() {
 	fmt.Println("Starting Peril server...")
+	playState := routing.PlayingState{ IsPaused: false}
 	conString := "amqp://guest:guest@localhost:5672/"
 	gameCon, err := amqp.Dial(conString)
 	if err != nil {
@@ -23,25 +24,41 @@ func main() {
 
 	fmt.Println("Connection successful!")
 
+	gamelogic.PrintServerHelp()
 	gameChan, err := gameCon.Channel()
 	if err != nil {
 		fmt.Println("error creating amqp channel")
 		os.Exit(1)
 	}
-	fmt.Println("exchange:", routing.ExchangePerilDirect, "key:", routing.PauseKey)	
-	if err = pubsub.PublishJSON(gameChan, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true}); err != nil {
-		fmt.Println("publish error:", err)
-	}else {
-		fmt.Println("published pause message")
+
+	loop:
+	for {
+		input := gamelogic.GetInput()
+		switch input[0]{
+		case "pause":
+			//fmt.Println("exchange:", routing.ExchangePerilDirect, "key:", routing.PauseKey)	
+			if err = pubsub.PublishJSON(gameChan, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true}); err != nil {
+				fmt.Println("pause publish error:", err)
+			}else {
+				fmt.Println("published pause message")
+				playState.IsPaused = true
+			}
+		case "resume":
+			if playState.IsPaused == true {
+				if err = pubsub.PublishJSON(gameChan, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: false}); err != nil {
+					fmt.Println("unpause publish error:", err)
+				}else {
+					fmt.Println("published unpause message")
+					playState.IsPaused = false
+				}
+			}
+		case "quit":
+			fmt.Println("Quit command recieved, shutting down gracefully")
+			break loop
+		case "help":
+			gamelogic.PrintServerHelp()
+		default:
+			fmt.Println("I do not understand that command")
+		}
 	}
-
-	gamelogic.PrintServerHelp()
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-		_ = <-sigs
-		fmt.Println("\nGracefully shutting down...")
-		gameCon.Close()
-		os.Exit(0)
-	
 }

@@ -7,6 +7,12 @@ import (
 	"fmt"
 )
 
+type SimpleQueueType string
+
+const (Transient SimpleQueueType = "transient"
+	Durable SimpleQueueType = "durable"
+)
+
 func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	jsonBytes, err := json.Marshal(val)
 	if err != nil {
@@ -24,4 +30,26 @@ func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 		return err
 	}
 	return nil
+}
+
+func DeclareAndBind(
+	conn *amqp.Connection,
+	exchange, 
+	queueName,
+	key string,
+	queueType SimpleQueueType, 
+) (*amqp.Channel, amqp.Queue, error){
+	gameChan, err := conn.Channel()
+	if err != nil {
+		return nil, amqp.Queue{}, err
+	}
+	gameQueue, err := gameChan.QueueDeclare(queueName, queueType == Durable, queueType == Transient, queueType == Transient, false, nil)
+	if err != nil {
+		return nil, amqp.Queue{}, err
+	}
+	err = gameChan.QueueBind(queueName, key, exchange, false, nil)	
+	if err != nil {
+		return nil, amqp.Queue{}, err
+	}
+	return gameChan, gameQueue, nil
 }

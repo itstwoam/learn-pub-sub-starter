@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"github.com/itstwoam/learn-pub-sub-starter/internal/pubsub"
 	"github.com/itstwoam/learn-pub-sub-starter/internal/routing"
+	"github.com/itstwoam/learn-pub-sub-starter/internal/gamelogic"
 )
 
 func main() {
@@ -34,6 +35,7 @@ func main() {
 		fmt.Println("published pause message")
 	}
 
+	gamelogic.PrintServerHelp()
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 

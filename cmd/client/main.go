@@ -35,5 +35,33 @@ func main() {
 		fmt.Println("error binding queue: ", err)
 		os.Exit(1)
 	}
-	_ = gamelogic.GetInput()
+	myGameState := gamelogic.NewGameState(uName)
+
+	loop:
+	for {
+		input := gamelogic.GetInput()
+		switch input[0]{
+		case "spawn":
+			err = myGameState.CommandSpawn(input)
+			if err != nil {
+				fmt.Errorf("Invalid usage:",err)
+			}
+		case "move":
+			_, err := myGameState.CommandMove(input)
+			if err != nil {
+				fmt.Errorf("Invalid usage:", err)
+			} 
+		case "status":
+			myGameState.CommandStatus()
+		case "help":
+			gamelogic.PrintClientHelp()
+		case "spam":
+			fmt.Println("Spamming not allowed yet!")
+		case "quit":
+			gamelogic.PrintQuit()
+			break loop
+		default:
+			fmt.Println("I do not understand that command")
+		}
+	}
 }

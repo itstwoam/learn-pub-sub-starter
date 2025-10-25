@@ -53,3 +53,38 @@ func DeclareAndBind(
 	}
 	return gameChan, gameQueue, nil
 }
+
+func SubscribeJSON[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType SimpleQueueType,
+	handler func(T),
+	) error {
+	//decChannel, decQueue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	decChannel, _, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	if err != nil {
+		return err
+	}
+	decChan, err := decChannel.Consume(queueName, "", false, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+	go startDeliveryWorker(decChan, handler)
+	return nil
+}
+
+func startDeliveryWorker[T any](deliveries <-chan amqp.Delivery, handler func(T)){
+	go func() {
+		for msg := range deliveries {
+			var t T
+			if err := json.Unmarshal(msg.Body, &t); err != nil {
+				fmt.Printf("Failed to unmarshal: %v", err)
+				continue
+			}
+			handler(t)
+			_ = msg.Ack(false)
+		}
+	}()
+}

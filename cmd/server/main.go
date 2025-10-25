@@ -31,6 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	/**amqp.Channel, amqp.Queue, error*/_, _, err = pubsub.DeclareAndBind(gameCon, routing.ExchangePerilTopic, "game_logs", "game_logs.*", pubsub.Durable) 
 	loop:
 	for {
 		input := gamelogic.GetInput()

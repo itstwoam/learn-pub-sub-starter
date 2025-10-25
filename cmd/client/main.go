@@ -30,12 +30,14 @@ func main() {
 	}
 
 	_, _, err = pubsub.DeclareAndBind(gameCon, routing.ExchangePerilDirect, routing.PauseKey+"."+uName, routing.PauseKey, pubsub.Transient)
-	//decChan, decQueue, err := pubsub.DeclareAndBind(gameCon, routing.ExhangePerilDirect, routing.PauseKey+"."+uName, routing.PauseKey, SimpleQueueType.Transient)
+	//decChan, decQueue, err := pubsub.DeclareAndBind(gameCon, routing.ExhangePerilDirect, routing.PauseKey+"."+uName, routing.PauseKey, pubsub.Transient)
 	if err != nil {
 		fmt.Println("error binding queue: ", err)
 		os.Exit(1)
 	}
 	myGameState := gamelogic.NewGameState(uName)
+
+	pubsub.SubscribeJSON(gameCon, routing.ExchangePerilDirect, routing.PauseKey+"."+uName, routing.PauseKey, pubsub.Transient, handlerPause(myGameState))
 
 	loop:
 	for {
@@ -63,5 +65,12 @@ func main() {
 		default:
 			fmt.Println("I do not understand that command")
 		}
+	}
+}
+
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState){
+	return func(ps routing.PlayingState){
+		defer fmt.Print("> ")
+		gs.HandlePause(ps)
 	}
 }

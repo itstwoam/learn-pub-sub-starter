@@ -13,12 +13,12 @@ const (Transient SimpleQueueType = "transient"
 	Durable SimpleQueueType = "durable"
 )
 
-// type AckType string
-//
-// const (Ack AckType = "ack"
-// 	NackRequeue AckType = "nackR"
-// 	NackDiscard AckType = "nackD"
-// )
+type AckType string
+
+const (Ack AckType = "ack"
+	NackRequeue AckType = "nackR"
+	NackDiscard AckType = "nackD"
+)
 
 func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	jsonBytes, err := json.Marshal(val)
@@ -67,7 +67,7 @@ func SubscribeJSON[T any](
 	queueName,
 	key string,
 	queueType SimpleQueueType,
-	handler func(T),
+	handler func(T) AckType,
 	) error {
 	//decChannel, decQueue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	decChannel, _, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
@@ -82,7 +82,7 @@ func SubscribeJSON[T any](
 	return nil
 }
 
-func startDeliveryWorker[T any](deliveries <-chan amqp.Delivery, handler func(T)){
+func startDeliveryWorker[T any](deliveries <-chan amqp.Delivery, handler func(T) AckType){
 	go func() {
 		for msg := range deliveries {
 			var t T
@@ -90,8 +90,21 @@ func startDeliveryWorker[T any](deliveries <-chan amqp.Delivery, handler func(T)
 				fmt.Printf("Failed to unmarshal: %v", err)
 				continue
 			}
-			handler(t)
-			_ = msg.Ack(false)
+			ack := handler(t)
+
+			switch ack {
+			case Ack:
+				fmt.Println("Acknowledged")
+				_ = msg.Ack(false)
+			case NackRequeue:
+				fmt.Println("Nacked and requeued")
+				_ = msg.Nack(false, true)
+			case NackDiscard:
+				fmt.Println("Nacked and discarded")
+				_ = msg.Nack(false, false)
+			default:
+				fmt.Println("unkown AckType, message not acknowledged")
+			}
 		}
 	}()
 }

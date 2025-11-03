@@ -23,21 +23,33 @@ func main() {
 
 	fmt.Println("Connection successful!")
 
+	publishCh, err := gameCon.Channel()
+	if err != nil {
+		fmt.Println("could not create channel: ", err)
+	}
+
 	uName, err := gamelogic.ClientWelcome()
 	if err != nil {
 		fmt.Println("Error while getting user name: ", err)
 		os.Exit(1)
 	}
 
-	_, _, err = pubsub.DeclareAndBind(gameCon, routing.ExchangePerilDirect, routing.PauseKey+"."+uName, routing.PauseKey, pubsub.Transient)
+	myGameState := gamelogic.NewGameState(uName)
+	_, _, err = pubsub.DeclareAndBind(gameCon, routing.ExchangePerilDirect, routing.PauseKey+"."+myGameState.GetUsername(), routing.PauseKey, pubsub.Transient)
 	//decChan, decQueue, err := pubsub.DeclareAndBind(gameCon, routing.ExhangePerilDirect, routing.PauseKey+"."+uName, routing.PauseKey, pubsub.Transient)
 	if err != nil {
 		fmt.Println("error binding queue: ", err)
 		os.Exit(1)
 	}
-	myGameState := gamelogic.NewGameState(uName)
 
-	pubsub.SubscribeJSON(gameCon, routing.ExchangePerilDirect, routing.PauseKey+"."+uName, routing.PauseKey, pubsub.Transient, handlerPause(myGameState))
+	pubsub.SubscribeJSON(gameCon, routing.ExchangePerilDirect, routing.PauseKey+"."+myGameState.GetUsername(), routing.PauseKey, pubsub.Transient, handlerPause(myGameState))
+
+	err = pubsub.SubscribeJSON(gameCon, routing.ExchangePerilTopic, routing.ArmyMovesPrefix+"."+myGameState.Player.Username, routing.ArmyMovesPrefix + ".*", pubsub.Transient, handlerMove(myGameState))
+	if err != nil {
+		fmt.Println("Error when subscribing to army_moves: ", err)
+		fmt.Println("Exiting")
+		os.Exit(1)
+	}
 
 	loop:
 	for {
@@ -49,10 +61,18 @@ func main() {
 				fmt.Errorf("Invalid usage:",err)
 			}
 		case "move":
-			_, err := myGameState.CommandMove(input)
+			myMove, err := myGameState.CommandMove(input)
 			if err != nil {
 				fmt.Errorf("Invalid usage:", err)
+				continue
 			} 
+				err = pubsub.PublishJSON(publishCh, routing.ExchangePerilTopic, routing.ArmyMovesPrefix+"."+myGameState.GetUsername(), myMove)
+				if err != nil {
+					fmt.Println("Error when publishing move: ", err)
+					fmt.Println("Failed to publish move.")
+				}
+				fmt.Println("Published move successfully");
+			
 		case "status":
 			myGameState.CommandStatus()
 		case "help":
@@ -72,5 +92,12 @@ func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState){
 	return func(ps routing.PlayingState){
 		defer fmt.Print("> ")
 		gs.HandlePause(ps)
+	}
+}
+
+func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) {
+	return func(move gamelogic.ArmyMove) {
+		defer fmt.Print("> ")
+		gs.HandleMove(move)
 	}
 }

@@ -50,7 +50,10 @@ func DeclareAndBind(
 	if err != nil {
 		return nil, amqp.Queue{}, err
 	}
-	gameQueue, err := gameChan.QueueDeclare(queueName, queueType == Durable, queueType == Transient, queueType == Transient, false, nil)
+	args := amqp.Table{
+		"x-dead-letter-exchange": "peril_dlx",
+	}
+	gameQueue, err := gameChan.QueueDeclare(queueName, queueType == Durable, queueType == Transient, queueType == Transient, false, args)
 	if err != nil {
 		return nil, amqp.Queue{}, err
 	}

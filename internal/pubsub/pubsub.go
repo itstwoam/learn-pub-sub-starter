@@ -98,13 +98,16 @@ func startDeliveryWorker[T any](deliveries <-chan amqp.Delivery, handler func(T)
 			switch ack {
 			case Ack:
 				fmt.Println("Acknowledged")
-				_ = msg.Ack(false)
+				msg.Ack(false)
+				//_ = msg.Ack(false)
 			case NackRequeue:
 				fmt.Println("Nacked and requeued")
-				_ = msg.Nack(false, true)
+				//_ = msg.Nack(false, true)
+				msg.Nack(false, true)
 			case NackDiscard:
 				fmt.Println("Nacked and discarded")
-				_ = msg.Nack(false, false)
+				//_ = msg.Nack(false, false)
+				msg.Nack(false, false)
 			default:
 				fmt.Println("unkown AckType, message not acknowledged")
 			}

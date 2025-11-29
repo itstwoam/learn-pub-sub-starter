@@ -10,6 +10,7 @@ import (
 	"github.com/itstwoam/learn-pub-sub-starter/internal/pubsub"
 	"github.com/itstwoam/learn-pub-sub-starter/internal/routing"
 	"github.com/itstwoam/learn-pub-sub-starter/internal/gamelogic"
+	"time"
 )
 
 func main() {
@@ -59,14 +60,14 @@ func main() {
 		routing.WarRecognitionsPrefix,
 		routing.WarRecognitionsPrefix+".*",
 		pubsub.Durable,
-		handlerWar(myGameState),
+		handlerWar(myGameState, publishCh),
 		)
 
 	if err != nil {
 		log.Fatalf("could not subscribe to war declarations: %v", err)
 	}
 
-	loop:
+	//loop:
 	for {
 		fmt.Println("Awaiting input in main loop")
 		input := gamelogic.GetInput()
@@ -145,30 +146,66 @@ func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogi
 	}
 }
 
-func handlerWar(gs *gamelogic.GameState) func(dw gamelogic.RecognitionOfWar) pubsub.AckType {
+func handlerWar(gs *gamelogic.GameState, publishCh *amqp.Channel) func(dw gamelogic.RecognitionOfWar) pubsub.AckType {
 	return func(dw gamelogic.RecognitionOfWar) pubsub.AckType {
 		defer fmt.Println("> ")
-		warOutcome, _, _ := gs.HandleWar(dw)
+		warOutcome, winner, loser := gs.HandleWar(dw)
+		victorMessage := "%s won a war against %s."
+		drawMessage := "A war between %s and %s resulted in a draw."
 		switch warOutcome {
 		case gamelogic.WarOutcomeNotInvolved:
-			fmt.Println("--done--")
 			return pubsub.NackRequeue
 		case gamelogic.WarOutcomeNoUnits:
-			fmt.Println("--done--")
 			return pubsub.NackDiscard
 		case gamelogic.WarOutcomeOpponentWon:
-			fmt.Println("--done--")
+			err := publishGameLog(
+				publishCh,
+				gs.GetUsername(),
+				fmt.Sprintf(victorMessage, winner, loser),
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		case gamelogic.WarOutcomeYouWon:
-			fmt.Println("--done--")
+			err := publishGameLog(
+				publishCh,
+				gs.GetUsername(),
+				fmt.Sprintf(victorMessage, winner, loser),
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		case gamelogic.WarOutcomeDraw:
-			fmt.Println("--done--")
+			err := publishGameLog(
+				publishCh,
+				gs.GetUsername(),
+				fmt.Sprintf(drawMessage, winner, loser),
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		}
 		
 		fmt.Println("error: unkown war outcome")
-			fmt.Println("--done--")
 		return pubsub.NackDiscard
 	}
+}
+
+func publishGameLog(publishCh *amqp.Channel, username, msg string) error {
+	return pubsub.PublishGob(
+	publishCh,
+	routing.ExchangePerilTopic,
+		routing.GameLogSlug+"."+username,
+		routing.GameLog{
+			Username:	username,
+			CurrentTime:	time.Now(),
+			Message:	msg,
+		},
+		)
 }

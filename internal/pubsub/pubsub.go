@@ -5,6 +5,8 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"context"
 	"fmt"
+	"bytes"
+	"encoding/gob"
 )
 
 type SimpleQueueType string
@@ -113,4 +115,24 @@ func startDeliveryWorker[T any](deliveries <-chan amqp.Delivery, handler func(T)
 			}
 		}
 	}()
+}
+
+func PublishGob[T any](ch *amqp.Channel, exchange, key string, val T) error {
+	//jsonBytes, err := json.Marshal(val)
+	//gob.Register(val)
+	
+	var buff bytes.Buffer
+	//err := gob.NewEncoder(&buf).Encode(val)
+	encoder := gob.NewEncoder(&buff)
+	err := encoder.Encode(val)
+	if err != nil {
+		fmt.Println("error in PublishGob() while encoding input value")
+		return err
+	}
+
+	ctx := context.Background()
+	imm := false
+	man := false
+	msg := amqp.Publishing{ ContentType: "application/gob", Body: buff.Bytes()}
+	return ch.PublishWithContext(ctx, exchange, key, man, imm, msg)
 }
